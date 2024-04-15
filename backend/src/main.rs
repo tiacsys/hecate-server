@@ -6,9 +6,7 @@ use rocket::{
     fs::NamedFile,
     get,
     launch,
-    response::status::{
-        NotFound,
-    },
+    response::status::NotFound,
     routes,
     serde::json::Json,
     State
@@ -16,24 +14,29 @@ use rocket::{
 use rocket_ws as ws;
 use rocket_ws::WebSocket;
 use hecate_protobuf as proto;
-use proto::{Acceleration, Message};
+use proto::Message;
 
 struct AppState {
     connected: Arc<Mutex<bool>>,
-    recent_data: Arc<Mutex<Option<proto::Acceleration>>>,
+    recent_data: Arc<Mutex<proto::SensorData>>,
 }
 
 impl AppState {
     pub fn new() -> Self {
         Self {
             connected: Arc::new(Mutex::new(false)),
-            recent_data: Arc::new(Mutex::new(None)),
+            recent_data: Arc::new(Mutex::new(proto::SensorData{id: "feather".into(), samples: Vec::new()})),
         }
     }
 
     pub async fn set_connected(&self, connected: bool) {
         let mut locked = self.connected.lock().await;
         *locked = connected;
+    }
+
+    pub async fn append_record(&self, mut new_records: proto::SensorData) -> () {
+        let mut recent_data = self.recent_data.lock().await;
+        recent_data.samples.append(&mut new_records.samples);
     }
 }
 
@@ -50,7 +53,7 @@ async fn get_index() -> Result<NamedFile, NotFound<String>> {
 }
 
 #[get("/")]
-async fn index() -> Result<NamedFile, NotFound<String>> {
+async fn index(state: &State<AppState>) -> Result<NamedFile, NotFound<String>> {
     get_index().await
 }
 
@@ -62,13 +65,9 @@ async fn static_files(path: PathBuf) -> Result<NamedFile, NotFound<String>> {
 }
 
 #[get("/data")]
-async fn data(state: &State<AppState>) -> Json<Acceleration> {
+async fn data(state: &State<AppState>) -> Json<proto::SensorData> {
     let locked = state.recent_data.lock().await;
-    if let Some(value) = locked.clone() {
-        Json(value)
-    } else {
-        Json(Acceleration { x: 0.0, y: 0.0, z: 0.0 })
-    }
+    Json(locked.clone())
 }
 
 #[get("/connected")]
@@ -93,9 +92,11 @@ async fn ws_data<'r>(ws: WebSocket, state: &'r State<AppState>) -> ws::Channel<'
                     state.set_connected(false).await;
                 },
                 Ok(ws::Message::Binary(data)) => {
-                    if let Ok(decoded) = Acceleration::decode(Bytes::from(data)) {
-                        let mut locked = state.recent_data.lock().await;
-                        *locked = Some(decoded);
+                    if let Ok(decoded) = proto::SensorData::decode(Bytes::from(data)) {
+                        println!("Updating data");
+                        state.append_record(decoded).await;
+                    } else {
+                        println!("Failed to decode data");
                     }
                 }
                 Err(_) => {
@@ -104,6 +105,8 @@ async fn ws_data<'r>(ws: WebSocket, state: &'r State<AppState>) -> ws::Channel<'
                 _=> {},
             }
         }
+
+        println!("Stream broke :(");
 
         Ok(())
     }))

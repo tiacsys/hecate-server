@@ -8,3 +8,5 @@ rocket = { version = "0.5.0", features = ["json"] }
 rocket_ws = "0.1.0"
 hecate-protobuf = { git = "https://github.com/tiacsys/hecate-protobuf" }
 bytes = "1.6.0"
+rand = "0.8.5"
+charming = { version = "0.3.1", features = ["ssr"] }

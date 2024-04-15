@@ -3,7 +3,10 @@ use gloo::timers::callback::Interval;
 use gloo::net::http;
 use anyhow::Result;
 use huginn_protobuf as proto;
-use proto::Acceleration;
+use charming::{
+    component::Axis, element::AxisType, series::Line, Chart, WasmRenderer
+};
+
 
 async fn fetch_connection_status() -> Result<bool> {
     let response = http::Request::get("/connected").send().await?;
@@ -11,15 +14,38 @@ async fn fetch_connection_status() -> Result<bool> {
     Ok(parsed)
 }
 
-async fn fetch_recent_data() -> Result<Acceleration> {
+async fn fetch_recent_data() -> Result<proto::SensorData> {
     let response = http::Request::get("/data").send().await?;
     let parsed = response.json().await?;
     Ok(parsed)
 }
 
+fn plot(xs: &[f64], ys: &[f64]) -> Html {
+
+    let data = xs.into_iter().zip(ys.into_iter()).map(|(x, y)| vec![*x, *y]).collect();
+    yew::platform::spawn_local(async move {
+
+        let chart = Chart::new()
+            .x_axis(Axis::new()
+                .type_(AxisType::Value)
+            )
+            .y_axis(Axis::new()
+                .type_(AxisType::Value)
+            )
+            .series(Line::new()
+                .data(data)
+            );
+        WasmRenderer::new(1000, 800)
+            .render("chart", &chart).expect(":(");
+    });
+
+    html! {
+        <div id="chart"></div>
+    }
+}
 struct App {
     connected: bool,
-    recent_data: Option<Acceleration>,
+    recent_data: Option<proto::SensorData>,
     _updater: Interval,
 }
 
@@ -27,7 +53,7 @@ enum AppMessage {
     UpdatePending,
     UpdateFailed,
     UpdateConnectionStatus(bool),
-    UpdateRecentData(Acceleration),
+    UpdateRecentData(proto::SensorData),
 }
 
 impl Component for App {
@@ -76,10 +102,18 @@ impl Component for App {
 
     fn view(&self, _ctx: &Context<Self>) -> Html {
 
+        let (times, acc_x) = if let Some(data) = &self.recent_data {
+            let times = data.samples.iter().map(|s| s.time as f64).collect();
+            let acc_x = data.samples.iter().map(|s| s.acceleration.x as f64).collect();
+            (times, acc_x)
+        } else {
+            (Vec::new(), Vec::new())
+        };
+
         html! {
             <>
                 <p>{ format!("Connected: {}", self.connected) }</p>
-                <p>{ format!("Data: {:?}", self.recent_data) }</p>
+                { plot(&times, &acc_x) }
             </>
         }
     }
