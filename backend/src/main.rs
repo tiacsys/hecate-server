@@ -5,6 +5,7 @@ use rocket::futures::lock::{self, Mutex};
 use rocket::{
     fs::NamedFile,
     get,
+    post,
     launch,
     response::status::NotFound,
     routes,
@@ -14,7 +15,7 @@ use rocket::{
 use rocket_ws as ws;
 use rocket_ws::WebSocket;
 use hecate_protobuf as proto;
-use proto::Message;
+use proto::{Message, SensorData};
 
 struct AppState {
     connected: Arc<Mutex<bool>>,
@@ -44,7 +45,7 @@ impl AppState {
 fn rocket() -> _ {
     rocket::build()
         .manage(AppState::new())
-        .mount("/", routes![index, static_files, data, connected, ws_data])
+        .mount("/", routes![index, static_files, data, connected, ws_data, reset_data])
 }
 
 async fn get_index() -> Result<NamedFile, NotFound<String>> {
@@ -53,7 +54,7 @@ async fn get_index() -> Result<NamedFile, NotFound<String>> {
 }
 
 #[get("/")]
-async fn index(state: &State<AppState>) -> Result<NamedFile, NotFound<String>> {
+async fn index() -> Result<NamedFile, NotFound<String>> {
     get_index().await
 }
 
@@ -74,6 +75,15 @@ async fn data(state: &State<AppState>) -> Json<proto::SensorData> {
 async fn connected(state: &State<AppState>) -> Json<bool> {
     let locked = state.connected.lock().await;
     Json(*locked)
+}
+
+#[post("/reset/data")]
+async fn reset_data(state: &State<AppState>) -> () {
+    let mut locked = state.recent_data.lock().await;
+    *locked = SensorData {
+        id: "feather".into(),
+        samples: Vec::new(),
+    };
 }
 
 #[get("/ws")]
