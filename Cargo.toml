@@ -3,7 +3,6 @@
 members = [
 	"backend",
 	"ui",
-	"common",
 ]
 
 resolver = "2"

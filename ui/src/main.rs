@@ -1,8 +1,9 @@
 use yew::prelude::*;
 use gloo::timers::callback::Interval;
 use gloo::net::http;
-use ::common::DataPoint;
 use anyhow::Result;
+use huginn_protobuf as proto;
+use proto::Acceleration;
 
 async fn fetch_connection_status() -> Result<bool> {
     let response = http::Request::get("/connected").send().await?;
@@ -10,7 +11,7 @@ async fn fetch_connection_status() -> Result<bool> {
     Ok(parsed)
 }
 
-async fn fetch_recent_data() -> Result<String> {
+async fn fetch_recent_data() -> Result<Acceleration> {
     let response = http::Request::get("/data").send().await?;
     let parsed = response.json().await?;
     Ok(parsed)
@@ -18,7 +19,7 @@ async fn fetch_recent_data() -> Result<String> {
 
 struct App {
     connected: bool,
-    recent_data: String,
+    recent_data: Option<Acceleration>,
     _updater: Interval,
 }
 
@@ -26,7 +27,7 @@ enum AppMessage {
     UpdatePending,
     UpdateFailed,
     UpdateConnectionStatus(bool),
-    UpdateRecentData(String),
+    UpdateRecentData(Acceleration),
 }
 
 impl Component for App {
@@ -39,7 +40,7 @@ impl Component for App {
 
         App {
             connected: false,
-            recent_data: "".into(),
+            recent_data: None,
             _updater: updater,
         }
     }
@@ -66,7 +67,7 @@ impl Component for App {
                 true
             },
             AppMessage::UpdateRecentData(data) => {
-                self.recent_data = data;
+                self.recent_data = Some(data);
                 true
             }
             AppMessage::UpdateFailed => false,
@@ -78,7 +79,7 @@ impl Component for App {
         html! {
             <>
                 <p>{ format!("Connected: {}", self.connected) }</p>
-                <p>{ format!("Data: {}", self.recent_data) }</p>
+                <p>{ format!("Data: {:?}", self.recent_data) }</p>
             </>
         }
     }

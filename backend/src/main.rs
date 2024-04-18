@@ -1,17 +1,13 @@
 use std::sync::Arc;
 use std::path::PathBuf;
-use ::common::DataPoint;
+use bytes::Bytes;
 use rocket::futures::lock::{self, Mutex};
-use rocket::futures::StreamExt;
-use rocket::serde::Serialize;
 use rocket::{
     fs::NamedFile,
     get,
     launch,
-    post,
     response::status::{
         NotFound,
-        Accepted,
     },
     routes,
     serde::json::Json,
@@ -19,11 +15,12 @@ use rocket::{
 };
 use rocket_ws as ws;
 use rocket_ws::WebSocket;
-
+use hecate_protobuf as proto;
+use proto::{Acceleration, Message};
 
 struct AppState {
     connected: Arc<Mutex<bool>>,
-    recent_data: Arc<Mutex<Option<String>>>,
+    recent_data: Arc<Mutex<Option<proto::Acceleration>>>,
 }
 
 impl AppState {
@@ -65,12 +62,12 @@ async fn static_files(path: PathBuf) -> Result<NamedFile, NotFound<String>> {
 }
 
 #[get("/data")]
-async fn data(state: &State<AppState>) -> Json<String> {
+async fn data(state: &State<AppState>) -> Json<Acceleration> {
     let locked = state.recent_data.lock().await;
     if let Some(value) = locked.clone() {
         Json(value)
     } else {
-        Json("Nothing yet".into())
+        Json(Acceleration { x: 0.0, y: 0.0, z: 0.0 })
     }
 }
 
@@ -96,8 +93,10 @@ async fn ws_data<'r>(ws: WebSocket, state: &'r State<AppState>) -> ws::Channel<'
                     state.set_connected(false).await;
                 },
                 Ok(ws::Message::Binary(data)) => {
-                    let mut locked = state.recent_data.lock().await;
-                    *locked = String::from_utf8(data).ok();
+                    if let Ok(decoded) = Acceleration::decode(Bytes::from(data)) {
+                        let mut locked = state.recent_data.lock().await;
+                        *locked = Some(decoded);
+                    }
                 }
                 Err(_) => {
                     state.set_connected(false).await;
