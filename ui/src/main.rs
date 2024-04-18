@@ -146,7 +146,7 @@ impl Component for App {
 
     fn create(ctx: &Context<Self>) -> Self {
         let link = ctx.link().clone();
-        let updater = Interval::new(1000, move || link.send_message(AppMessage::UpdatePending));
+        let updater = Interval::new(5000, move || link.send_message(AppMessage::UpdatePending));
 
         App {
             connected: false,

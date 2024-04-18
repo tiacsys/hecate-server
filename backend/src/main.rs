@@ -103,7 +103,6 @@ async fn ws_data<'r>(ws: WebSocket, state: &'r State<AppState>) -> ws::Channel<'
                 },
                 Ok(ws::Message::Binary(data)) => {
                     if let Ok(decoded) = proto::SensorData::decode(Bytes::from(data)) {
-                        println!("Updating data");
                         state.append_record(decoded).await;
                     } else {
                         println!("Failed to decode data");
