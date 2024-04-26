@@ -1,3 +1,4 @@
 [debug]
-address = "192.168.110.52"
+address = "192.168.178.20"
+# address = "0.0.0.0"
 port = 8000

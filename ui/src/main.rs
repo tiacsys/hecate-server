@@ -1,206 +1,125 @@
+mod fetch;
+
+use fetch::Fetch;
+use polars::prelude::*;
 use yew::prelude::*;
-use gloo::timers::callback::Interval;
-use gloo::net::http;
-use anyhow::Result;
-use huginn_protobuf as proto;
-use charming::{
-    component::{Axis, Title}, element::AxisType, series::Line, Chart, WasmRenderer
-};
+use yew_hooks::prelude::*;
 
 
-async fn fetch_connection_status() -> Result<bool> {
-    let response = http::Request::get("/connected").send().await?;
-    let parsed = response.json().await?;
-    Ok(parsed)
-}
+#[function_component(ConnectionIndicator)]
+fn connection_indicator() -> Html {
 
-async fn fetch_recent_data() -> Result<proto::SensorData> {
-    let response = http::Request::get("/data").send().await?;
-    let parsed = response.json().await?;
-    Ok(parsed)
-}
+    let status = use_state(|| false );
+    {
+        let status = status.clone();
+        use_interval(move || {
+            let status = status.clone();
+            yew::platform::spawn_local(async move {
+                let new_status = bool::fetch("/connected").await.unwrap_or(false);
+                status.set(new_status);
+            });
 
-async fn request_reset_data() -> Result<()> {
-    http::Request::post("/reset/data").send().await?;
-    Ok(())
-}
-
-#[derive(Properties, PartialEq)]
-struct PlotAttributes {
-    plot_id: AttrValue,
-    #[prop_or_default]
-    title: String,
-    xs: Vec<f64>,
-    ys: Vec<f64>,
-}
-
-#[function_component(Plot)]
-fn plot(PlotAttributes { plot_id, title, xs, ys }: &PlotAttributes) -> Html {
-
-    let x_min = xs.iter().copied().max_by(|a, b| a.total_cmp(b)).unwrap_or(0.0);
-    let x_max = xs.iter().copied().min_by(|a, b| a.total_cmp(b)).unwrap_or(1.0);
-    let data = xs.into_iter().zip(ys.into_iter()).map(|(x, y)| vec![*x, *y]).collect();
-    let id_clone = plot_id.clone();
-    let title_clone = title.clone();
-    yew::platform::spawn_local(async move {
-
-        let chart = Chart::new()
-            .title(Title::new().text(title_clone))
-            .x_axis(Axis::new()
-                .type_(AxisType::Value)
-                .min(x_min)
-                .max(x_max)
-            )
-            .y_axis(Axis::new()
-                .type_(AxisType::Value)
-            )
-            .series(Line::new()
-                .data(data)
-            );
-        WasmRenderer::new(400, 300)
-            .render(&id_clone, &chart).expect(":(");
-    });
+        }, 1000);
+    }
 
     html! {
-        <div id={plot_id}></div>
+        <p>{ format!("Connected: {}", *status) }</p>
     }
 }
 
-#[derive(Properties, PartialEq)]
-struct DataPlotsProps {
-    data: proto::SensorData,
+#[derive(Debug, PartialEq, Properties)]
+struct DataFrameTableProps {
+    frame: DataFrame,
 }
 
-#[function_component(DataPlots)]
-fn data_plots(DataPlotsProps { data }: &DataPlotsProps) -> Html {
-
-    let times = data.samples.iter().map(|s| s.time as f64).collect::<Vec<_>>();
-    let acc_x = data.samples.iter().map(|s| s.acceleration.x as f64).collect::<Vec<_>>();
-    let acc_y = data.samples.iter().map(|s| s.acceleration.y as f64).collect::<Vec<_>>();
-    let acc_z = data.samples.iter().map(|s| s.acceleration.z as f64).collect::<Vec<_>>();
-    let mag_x = data.samples.iter().map(|s| s.magnetometer.x as f64).collect::<Vec<_>>();
-    let mag_y = data.samples.iter().map(|s| s.magnetometer.y as f64).collect::<Vec<_>>();
-    let mag_z = data.samples.iter().map(|s| s.magnetometer.z as f64).collect::<Vec<_>>();
-    let gyro_x = data.samples.iter().map(|s| s.gyroscope.x as f64).collect::<Vec<_>>();
-    let gyro_y = data.samples.iter().map(|s| s.gyroscope.y as f64).collect::<Vec<_>>();
-    let gyro_z = data.samples.iter().map(|s| s.gyroscope.z as f64).collect::<Vec<_>>();
+#[function_component(DataFrameTable)]
+fn dataframe_table(DataFrameTableProps { frame }: &DataFrameTableProps) -> Html {
 
     html! {
+        <p style="white-space: pre; font-family: monospace"> { format!("{frame}") }</p>
+    }
+}
+
+#[derive(Debug, Properties, PartialEq)]
+struct DataViewProps {
+    device_id: UseStateHandle<String>
+}
+
+#[function_component(DataView)]
+fn data_view(DataViewProps { device_id }: &DataViewProps) -> Html {
+
+    let data = use_state(|| DataFrame::empty());
+    {
+        let data = data.clone();
+        let device_id = device_id.clone();
+        use_interval(move || {
+            let data = data.clone();
+            let device_id = device_id.clone();
+            yew::platform::spawn_local(async move {
+                if let Ok(new_data) = DataFrame::fetch(&format!("/sensor/{}/data", *device_id)).await {
+                    data.set(new_data);
+                }
+            });
+        }, 1000);
+    }
+    
+    html! {
         <>
-            <h2>{ "Accelerometer" }</h2>
-            <div>
-                <div class="inline-block-child">
-                    <Plot plot_id="acc_x" title="X-Axis" xs={times.clone()} ys={acc_x}/>
-                </div>
-                <div class="inline-block-child">
-                    <Plot plot_id="acc_y" title="Y-Axis" xs={times.clone()} ys={acc_y}/>
-                </div>
-                <div class="inline-block-child">
-                    <Plot plot_id="acc_zz" title="Z-Axis" xs={times.clone()} ys={acc_z}/>
-                </div>
-            </div>
-            <h2>{ "Magnetometer" }</h2>
-            <div>
-                <div class="inline-block-child">
-                    <Plot plot_id="mag_x" title="X-Axis" xs={times.clone()} ys={mag_x}/>
-                </div>
-                <div class="inline-block-child">
-                    <Plot plot_id="mag_y" title="Y-Axis" xs={times.clone()} ys={mag_y}/>
-                </div>
-                <div class="inline-block-child">
-                    <Plot plot_id="mag_z" title="Z-Axis" xs={times.clone()} ys={mag_z}/>
-                </div>
-            </div>
-            <h2>{ "Gyroscope" }</h2>
-            <div>
-                <div class="inline-block-child">
-                    <Plot plot_id="gyro_x" title="X-Axis" xs={times.clone()} ys={gyro_x}/>
-                </div>
-                <div class="inline-block-child">
-                    <Plot plot_id="gyro_y" title="Y-Axis" xs={times.clone()} ys={gyro_y}/>
-                </div>
-                <div class="inline-block-child">
-                    <Plot plot_id="gyro_z" title="Z-Axis" xs={times.clone()} ys={gyro_z}/>
-                </div>
-            </div>
+            <h2>{ format!("Device: {}", **device_id) }</h2>
+            <DataFrameTable frame={(*data).clone()} />
         </>
     }
 }
 
-struct App {
-    connected: bool,
-    recent_data: Option<proto::SensorData>,
-    _updater: Interval,
+#[derive(Debug, Properties, PartialEq)]
+struct ConnectedDevicesListProps {
+    selected_id: UseStateHandle<String>,
 }
 
-enum AppMessage {
-    UpdatePending,
-    UpdateFailed,
-    UpdateConnectionStatus(bool),
-    UpdateRecentData(proto::SensorData),
-}
+#[function_component(ConnectedDevicesList)]
+fn connected_devices_list(ConnectedDevicesListProps { selected_id }: &ConnectedDevicesListProps) -> Html {
 
-impl Component for App {
-    type Properties = ();
-    type Message = AppMessage;
-
-    fn create(ctx: &Context<Self>) -> Self {
-        let link = ctx.link().clone();
-        let updater = Interval::new(5000, move || link.send_message(AppMessage::UpdatePending));
-
-        App {
-            connected: false,
-            recent_data: None,
-            _updater: updater,
-        }
-    }
-
-    fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
-        match msg {
-            AppMessage::UpdatePending => {
-                ctx.link().send_future(async {
-                    match fetch_connection_status().await {
-                        Ok(connected) => AppMessage::UpdateConnectionStatus(connected),
-                        Err(_) => AppMessage::UpdateFailed,
-                    }
-                });
-                ctx.link().send_future(async {
-                    match fetch_recent_data().await {
-                        Ok(data) => AppMessage::UpdateRecentData(data),
-                        Err(_) => AppMessage::UpdateFailed,
-                    }
-                });
-                false
-            },
-            AppMessage::UpdateConnectionStatus(connected) => {
-                self.connected = connected;
-                true
-            },
-            AppMessage::UpdateRecentData(data) => {
-                self.recent_data = Some(data);
-                true
-            }
-            AppMessage::UpdateFailed => false,
-        }
-    }
-
-    fn view(&self, _ctx: &Context<Self>) -> Html {
-
-        html! {
-            <>
-                <p>{ format!("Connected: {}", self.connected) }</p>
-                <button onclick={Callback::from(|_| {
-                    yew::platform::spawn_local(async move {
-                        _ = request_reset_data().await;
-                    });
-                })}>
-                    { "Reset Data" }
-                </button>
-                if let Some(data) = self.recent_data.clone() {
-                    <DataPlots data={data} />
+    let ids = use_state(|| Vec::<String>::new());
+    {
+        let ids = ids.clone();
+        use_interval(move || {
+            let ids = ids.clone();
+            yew::platform::spawn_local(async move {
+                if let Ok(received_ids) = Vec::<String>::fetch("/sensor/connections").await {
+                    ids.set(received_ids);
                 }
-            </>
+            });
+        }, 1000);
+    }
+
+    html! {
+        <>
+        <h2>{ "Connected Devices" }</h2>
+        <table style="tr:hover {background-color: gray;}">
+        { 
+            for (*ids).iter().map(|id| {
+                let selected_id = selected_id.clone();
+                let id_clone = id.clone();
+                html! {
+                    <tr><td onclick={Callback::from(move |_| selected_id.set(id_clone.clone()))}> {id} </td></tr>
+                }
+            })
         }
+        </table>
+        </>
+    }
+}
+
+#[function_component(App)]
+fn app() -> Html {
+
+    let selected_id = use_state(|| String::new());
+
+    html! {
+        <>
+            <ConnectedDevicesList selected_id={selected_id.clone()} />
+            <DataView device_id={selected_id.clone()}/>
+        </>
     }
 }
 
