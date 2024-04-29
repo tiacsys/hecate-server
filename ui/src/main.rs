@@ -48,6 +48,12 @@ struct DataViewProps {
 #[function_component(DataView)]
 fn data_view(DataViewProps { device_id }: &DataViewProps) -> Html {
 
+    if (*device_id.clone()) == "" {
+        return html! {
+            <></>
+        };
+    }
+
     let data = use_state(|| DataFrame::empty());
     {
         let data = data.clone();
@@ -93,20 +99,20 @@ fn connected_devices_list(ConnectedDevicesListProps { selected_id }: &ConnectedD
     }
 
     html! {
-        <>
-        <h2>{ "Connected Devices" }</h2>
-        <table style="tr:hover {background-color: gray;}">
-        { 
-            for (*ids).iter().map(|id| {
-                let selected_id = selected_id.clone();
-                let id_clone = id.clone();
-                html! {
-                    <tr><td onclick={Callback::from(move |_| selected_id.set(id_clone.clone()))}> {id} </td></tr>
-                }
-            })
-        }
-        </table>
-        </>
+        <div class="device-list">
+            <h2>{ "Connected Devices" }</h2>
+            <table>
+            { 
+                for (*ids).iter().map(|id| {
+                    let selected_id = selected_id.clone();
+                    let id_clone = id.clone();
+                    html! {
+                        <tr><td onclick={Callback::from(move |_| selected_id.set(id_clone.clone()))}> {id} </td></tr>
+                    }
+                })
+            }
+            </table>
+        </div>
     }
 }
 
@@ -118,7 +124,9 @@ fn app() -> Html {
     html! {
         <>
             <ConnectedDevicesList selected_id={selected_id.clone()} />
-            <DataView device_id={selected_id.clone()}/>
+            <div class="main">
+                <DataView device_id={selected_id.clone()}/>
+            </div>
         </>
     }
 }

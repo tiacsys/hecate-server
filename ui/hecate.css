@@ -1,0 +1,30 @@
+body {
+    font-family: sans-serif;
+}
+
+.device-list {
+    width: 180px;
+    height: 100%;
+    position: fixed;
+    top: 0;
+    left: 0;
+    margin-right: 0;
+    padding-left: 10px;
+    padding-right: 10px;
+    background-color: lightgray;
+}
+
+.device-list table {
+    width: 100%;
+    background-color: whitesmoke;
+}
+
+.main {
+    margin-left: 200px;
+    padding: 10px 10px;
+}
+
+tr:hover {
+    background-color: white;
+    cursor: pointer;
+}
