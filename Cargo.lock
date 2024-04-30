@@ -1488,10 +1488,12 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "charming",
+ "chrono",
  "gloo 0.11.0",
  "huginn-protobuf",
  "polars",
  "serde",
+ "uuid",
  "yew",
  "yew-hooks",
 ]
