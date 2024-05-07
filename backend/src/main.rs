@@ -81,11 +81,36 @@ async fn sensor_connected(id: &str, state: &State<Connections>) -> Option<Json<b
         .and_then(|c| Some(Json(c.active)))
 }
 
-#[get("/sensor/<id>/data")]
-async fn sensor_data(id: &str, state: &State<Connections>) -> Option<Json<DataFrame>> {
+#[get("/sensor/<id>/data?<interval>")]
+async fn sensor_data(id: &str, interval: Option<String>, state: &State<Connections>) -> Option<Json<DataFrame>> {
     let mut lock = state.connections.lock().await;
     Connections::get(&mut lock, id)
-        .and_then(|c| Some(Json(c.recent_data().clone())))
+        .and_then(|c| {
+
+            match interval {
+                None => Some(c.recent_data().clone()),
+                Some(interval) => {
+                    let interval = polars::time::Duration::parse(&interval);
+                    c.recent_data().clone().lazy()
+                        .with_column((col("time") + lit(chrono::NaiveDate::from_isoywd_opt(0, 1, chrono::Weekday::Mon).unwrap())).alias("time_abs"))
+                        .sort(["time_abs"], Default::default())
+                        .group_by_dynamic(
+                            col("time_abs"),
+                            [],
+                            DynamicGroupOptions {
+                                every: interval,
+                                period: interval,
+                                offset: Duration::parse("0"),
+                                ..Default::default()
+                            }
+                        )
+                        .agg([col("*").mean()])
+                        .select([col("*").exclude(["time_abs"])])
+                        .collect().ok()
+                },
+            }
+        })
+        .and_then(|d| Some(Json(d)))
 }
 
 #[post("/sensor/<id>/data/reset")]

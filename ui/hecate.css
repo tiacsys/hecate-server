@@ -24,6 +24,11 @@ body {
     padding: 10px 10px;
 }
 
+.data-view-settings > * {
+    display: inline-block;
+    margin-right: 10px;
+}
+
 tr:hover {
     background-color: white;
     cursor: pointer;

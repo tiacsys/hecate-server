@@ -7,6 +7,8 @@ use yew::prelude::*;
 use yew_hooks::prelude::*;
 use uuid::Uuid;
 use charming::{component::{Axis, Title}, element::AxisType, series::Line, Chart, WasmRenderer};
+use wasm_bindgen::JsCast;
+use web_sys::HtmlInputElement;
 
 #[function_component(ConnectionIndicator)]
 fn connection_indicator() -> Html {
@@ -125,26 +127,6 @@ fn plot(PlotProps { data }: &PlotProps) -> Html {
     }
 }
 
-fn downsampled_data(frame: &DataFrame, time_str: &str, sample_len: polars::time::Duration) -> Option<DataFrame> {
-
-    frame.clone().lazy()
-        .with_column((col(time_str) + lit(chrono::NaiveDate::from_isoywd_opt(0, 1, chrono::Weekday::Mon).unwrap())).alias("time_abs"))
-        .sort(["time_abs"], Default::default())
-        .group_by_dynamic(
-            col("time_abs"),
-            [],
-            DynamicGroupOptions {
-                every: sample_len,
-                period: sample_len,
-                offset: Duration::parse("0"),
-                ..Default::default()
-            }
-        )
-        .agg([col("*").mean()])
-        .select([col("*").exclude(["time_abs"])])
-        .collect().ok()
-}
-
 #[derive(Debug, Properties, PartialEq)]
 struct DataViewProps {
     device_id: UseStateHandle<String>
@@ -160,48 +142,60 @@ fn data_view(DataViewProps { device_id }: &DataViewProps) -> Html {
     }
 
     let data = use_state(|| DataFrame::empty());
+    let sampling_interval = use_state(|| String::from("250ms"));
+
     {
         let data = data.clone();
+        let sampling_interval = sampling_interval.clone();
         let device_id = device_id.clone();
         use_interval(move || {
             let data = data.clone();
+            let sampling_interval = sampling_interval.clone();
             let device_id = device_id.clone();
             yew::platform::spawn_local(async move {
-                if let Ok(new_data) = DataFrame::fetch(&format!("/sensor/{}/data", *device_id)).await {
+                if let Ok(new_data) = DataFrame::fetch(&format!("/sensor/{}/data?interval={}", *device_id, *sampling_interval)).await {
                     data.set(new_data);
                 }
             });
         }, 1000);
     }
     
-    // Downsample by 10x
-    let downsampled = downsampled_data(&data, "time", Duration::parse("200ms")).unwrap_or(DataFrame::empty());
+    let reset_button_onclick = {
+        let device_id = device_id.clone();
+        Callback::from(move |_| {
+            let device_id = device_id.clone();
+            yew::platform::spawn_local(async move {
+                _ = http::Request::post(&format!("/sensor/{}/data/reset", *device_id)).send().await;
+            });
+        })
+    };
 
-    let acc_x = PlotData::over_time(&downsampled, "time", "acc_x", "Acc X");
-    let acc_y = PlotData::over_time(&downsampled, "time", "acc_y", "Acc Y");
-    let acc_z = PlotData::over_time(&downsampled, "time", "acc_z", "Acc Z");
-    let mag_x = PlotData::over_time(&downsampled, "time", "mag_x", "Mag X");
-    let mag_y = PlotData::over_time(&downsampled, "time", "mag_y", "Mag Y");
-    let mag_z = PlotData::over_time(&downsampled, "time", "mag_z", "Mag Z");
-    let gyro_x = PlotData::over_time(&downsampled, "time", "gyro_x", "Gyro X");
-    let gyro_y = PlotData::over_time(&downsampled, "time", "gyro_y", "Gyro Y");
-    let gyro_z = PlotData::over_time(&downsampled, "time", "gyro_z", "Gyro Z");
+    let sampling_interval_onchange = {
+        let sampling_interval = sampling_interval.clone();
+        Callback::from(move |e: Event| {
+            e.target()
+                .and_then(|t| t.dyn_into::<HtmlInputElement>().ok())
+                .map(|i| sampling_interval.set(i.value()));
+        })
+    };
+
+    let acc_x = PlotData::over_time(&data, "time", "acc_x", "Acc X");
+    let acc_y = PlotData::over_time(&data, "time", "acc_y", "Acc Y");
+    let acc_z = PlotData::over_time(&data, "time", "acc_z", "Acc Z");
+    let mag_x = PlotData::over_time(&data, "time", "mag_x", "Mag X");
+    let mag_y = PlotData::over_time(&data, "time", "mag_y", "Mag Y");
+    let mag_z = PlotData::over_time(&data, "time", "mag_z", "Mag Z");
+    let gyro_x = PlotData::over_time(&data, "time", "gyro_x", "Gyro X");
+    let gyro_y = PlotData::over_time(&data, "time", "gyro_y", "Gyro Y");
+    let gyro_z = PlotData::over_time(&data, "time", "gyro_z", "Gyro Z");
 
     html! {
         <>
-            <div>
-                <h2 style="display: inline-block">{ format!("Device: {}", **device_id) }</h2>
-                <button style="display: inline-block; margin-left: 10px;" onclick={
-                    let device_id = device_id.clone();
-                    Callback::from(move |_| {
-                        let device_id = device_id.clone();
-                        yew::platform::spawn_local(async move {
-                            _ = http::Request::post(&format!("/sensor/{}/data/reset", *device_id)).send().await;
-                        });
-                    })
-                }>
-                    { "Reset" }
-                </button>
+            <h2>{ format!("Device: {}", **device_id) }</h2>
+            <div class="data-view-settings">
+                <span>{ "Sampling interval:" }</span>
+                <input onchange={sampling_interval_onchange}/>
+                <button onclick={reset_button_onclick}>{ "Reset Data" }</button>
             </div>
             <table>
                 <tr>
@@ -223,8 +217,7 @@ fn data_view(DataViewProps { device_id }: &DataViewProps) -> Html {
                 </tr>
             </table>
             { "Raw data:" }
-            <DataFrameTable frame={downsampled.clone()}/>
-            // <DataFrameTable frame={(*data).clone()} />
+            <DataFrameTable frame={(*data).clone()} />
         </>
     }
 }
