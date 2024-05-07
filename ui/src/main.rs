@@ -175,11 +175,17 @@ fn data_view(DataViewProps { device_id }: &DataViewProps) -> Html {
     }
     
     // Downsample by 10x
-    let downsampled = downsampled_data(&data, "time", Duration::parse("100ms")).unwrap_or(DataFrame::empty());
+    let downsampled = downsampled_data(&data, "time", Duration::parse("200ms")).unwrap_or(DataFrame::empty());
 
     let acc_x = PlotData::over_time(&downsampled, "time", "acc_x", "Acc X");
     let acc_y = PlotData::over_time(&downsampled, "time", "acc_y", "Acc Y");
     let acc_z = PlotData::over_time(&downsampled, "time", "acc_z", "Acc Z");
+    let mag_x = PlotData::over_time(&downsampled, "time", "mag_x", "Mag X");
+    let mag_y = PlotData::over_time(&downsampled, "time", "mag_y", "Mag Y");
+    let mag_z = PlotData::over_time(&downsampled, "time", "mag_z", "Mag Z");
+    let gyro_x = PlotData::over_time(&downsampled, "time", "gyro_x", "Gyro X");
+    let gyro_y = PlotData::over_time(&downsampled, "time", "gyro_y", "Gyro Y");
+    let gyro_z = PlotData::over_time(&downsampled, "time", "gyro_z", "Gyro Z");
 
     html! {
         <>
@@ -202,6 +208,18 @@ fn data_view(DataViewProps { device_id }: &DataViewProps) -> Html {
                     <td><Plot data={acc_x}/></td>
                     <td><Plot data={acc_y}/></td>
                     <td><Plot data={acc_z}/></td>
+                </tr>
+                <tr>
+                    <td><Plot data={mag_x}/></td>
+                    <td><Plot data={mag_y}/></td>
+                    <td><Plot data={mag_z}/></td>
+
+                </tr>
+                <tr>
+                    <td><Plot data={gyro_x}/></td>
+                    <td><Plot data={gyro_y}/></td>
+                    <td><Plot data={gyro_z}/></td>
+
                 </tr>
             </table>
             { "Raw data:" }
