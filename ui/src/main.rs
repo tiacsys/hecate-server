@@ -1,6 +1,7 @@
 mod fetch;
 
 use fetch::Fetch;
+use gloo::net::http;
 use polars::prelude::*;
 use yew::prelude::*;
 use yew_hooks::prelude::*;
@@ -182,7 +183,20 @@ fn data_view(DataViewProps { device_id }: &DataViewProps) -> Html {
 
     html! {
         <>
-            <h2>{ format!("Device: {}", **device_id) }</h2>
+            <div>
+                <h2 style="display: inline-block">{ format!("Device: {}", **device_id) }</h2>
+                <button style="display: inline-block; margin-left: 10px;" onclick={
+                    let device_id = device_id.clone();
+                    Callback::from(move |_| {
+                        let device_id = device_id.clone();
+                        yew::platform::spawn_local(async move {
+                            _ = http::Request::post(&format!("/sensor/{}/data/reset", *device_id)).send().await;
+                        });
+                    })
+                }>
+                    { "Reset" }
+                </button>
+            </div>
             <table>
                 <tr>
                     <td><Plot data={acc_x}/></td>

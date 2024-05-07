@@ -19,6 +19,10 @@ impl Connection {
         &self.recent_data
     }
 
+    pub fn reset_recent_data(&mut self) -> () {
+        self.recent_data = DataFrame::empty();
+    }
+
     pub fn append_data(&mut self, new_data: DataFrame) -> Result<(), PolarsError> {
         self.recent_data = concat_lf_diagonal([
                 self.recent_data.clone().lazy(),

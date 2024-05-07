@@ -12,6 +12,7 @@ use rocket::{
     futures::lock::{Mutex, MutexGuard},
     fs::NamedFile,
     get,
+    post,
     launch,
     response::status::NotFound,
     routes,
@@ -48,6 +49,7 @@ fn rocket() -> _ {
             connections,
             sensor_connected,
             sensor_data,
+            sensor_data_reset,
             ws_data,
         ])
 }
@@ -84,6 +86,13 @@ async fn sensor_data(id: &str, state: &State<Connections>) -> Option<Json<DataFr
     let mut lock = state.connections.lock().await;
     Connections::get(&mut lock, id)
         .and_then(|c| Some(Json(c.recent_data().clone())))
+}
+
+#[post("/sensor/<id>/data/reset")]
+async fn sensor_data_reset(id: &str, state: &State<Connections>) -> () {
+    let mut lock = state.connections.lock().await;
+    Connections::get(&mut lock, id)
+        .map(|c| c.reset_recent_data());
 }
 
 #[get("/ws")]
