@@ -142,18 +142,21 @@ fn data_view(DataViewProps { device_id }: &DataViewProps) -> Html {
     }
 
     let data = use_state(|| DataFrame::empty());
-    let sampling_interval = use_state(|| String::from("250ms"));
+    let data_duration = use_state(|| String::from("1m"));
+    let sampling_interval = use_state(|| String::from("500ms"));
 
     {
         let data = data.clone();
         let sampling_interval = sampling_interval.clone();
+        let data_duration = data_duration.clone();
         let device_id = device_id.clone();
         use_interval(move || {
             let data = data.clone();
             let sampling_interval = sampling_interval.clone();
+            let data_duration = data_duration.clone();
             let device_id = device_id.clone();
             yew::platform::spawn_local(async move {
-                if let Ok(new_data) = DataFrame::fetch(&format!("/sensor/{}/data?interval={}", *device_id, *sampling_interval)).await {
+                if let Ok(new_data) = DataFrame::fetch(&format!("/sensor/{}/data?interval={}&duration={}", *device_id, *sampling_interval, *data_duration)).await {
                     data.set(new_data);
                 }
             });
@@ -167,6 +170,15 @@ fn data_view(DataViewProps { device_id }: &DataViewProps) -> Html {
             yew::platform::spawn_local(async move {
                 _ = http::Request::post(&format!("/sensor/{}/data/reset", *device_id)).send().await;
             });
+        })
+    };
+
+    let data_duration_onchange = {
+        let data_duration = data_duration.clone();
+        Callback::from(move |e: Event| {
+            e.target()
+                .and_then(|t| t.dyn_into::<HtmlInputElement>().ok())
+                .map(|i| data_duration.set(i.value()));
         })
     };
 
@@ -193,8 +205,10 @@ fn data_view(DataViewProps { device_id }: &DataViewProps) -> Html {
         <>
             <h2>{ format!("Device: {}", **device_id) }</h2>
             <div class="data-view-settings">
+                <span>{ "Duration:" }</span>
+                <input style="width: 7ch;" onchange={data_duration_onchange} placeholder={format!("{}", *data_duration)}/>
                 <span>{ "Sampling interval:" }</span>
-                <input onchange={sampling_interval_onchange}/>
+                <input style="width: 7ch;" onchange={sampling_interval_onchange} placeholder={format!("{}", *sampling_interval)}/>
                 <button onclick={reset_button_onclick}>{ "Reset Data" }</button>
             </div>
             <table>

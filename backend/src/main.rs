@@ -81,11 +81,14 @@ async fn sensor_connected(id: &str, state: &State<Connections>) -> Option<Json<b
         .and_then(|c| Some(Json(c.active)))
 }
 
-#[get("/sensor/<id>/data?<interval>")]
-async fn sensor_data(id: &str, interval: Option<String>, state: &State<Connections>) -> Option<Json<DataFrame>> {
+#[get("/sensor/<id>/data?<interval>&<duration>")]
+async fn sensor_data(id: &str, interval: Option<String>, duration: Option<String>, state: &State<Connections>) -> Option<Json<DataFrame>> {
     let mut lock = state.connections.lock().await;
     Connections::get(&mut lock, id)
         .and_then(|c| {
+
+            let duration_ns = polars::time::Duration::parse(&duration.unwrap_or(String::from("1m"))).nanoseconds();
+            let duration = chrono::Duration::nanoseconds(duration_ns);
 
             match interval {
                 None => Some(c.recent_data().clone()),
@@ -106,6 +109,7 @@ async fn sensor_data(id: &str, interval: Option<String>, state: &State<Connectio
                         )
                         .agg([col("*").mean()])
                         .select([col("*").exclude(["time_abs"])])
+                        .filter(col("time").gt(col("time").max() - lit(duration)))
                         .collect().ok()
                 },
             }
@@ -180,7 +184,7 @@ async fn ws_data<'r>(ws: ws::WebSocket, state: &'r State<Connections>) -> ws::Ch
                                 let mut lock = state.connections.lock().await;
                                 if let Some(connection) = Connections::get(&mut lock, &id) {
                                     _ = connection.append_data(frame)
-                                        .and_then(|_| connection.discard_older_than(chrono::Duration::seconds(60)));
+                                        .and_then(|_| connection.discard_older_than(chrono::Duration::minutes(5)));
                                 }
                             }
                         },
