@@ -85,11 +85,10 @@ impl PlotData {
         let (xs, ys): (Vec<_>, Vec<_>) = xs
             .into_iter()
             .zip(ys)
-            .map(|(x, y)| match (x, y) {
+            .filter_map(|(x, y)| match (x, y) {
                 (Some(x), Some(y)) => Some((x, y)),
                 _ => None,
             })
-            .filter_map(|xy| xy)
             .unzip();
 
         Some(Self {
@@ -155,13 +154,13 @@ struct DataViewProps {
 
 #[function_component(DataView)]
 fn data_view(DataViewProps { device_id }: &DataViewProps) -> Html {
-    if (*device_id.clone()) == "" {
+    if (*device_id.clone()).is_empty() {
         return html! {
             <></>
         };
     }
 
-    let data = use_state(|| DataFrame::empty());
+    let data = use_state(DataFrame::empty);
     let data_duration = use_state(|| String::from("1m"));
     let sampling_interval = use_state(|| String::from("500ms"));
 
@@ -206,18 +205,24 @@ fn data_view(DataViewProps { device_id }: &DataViewProps) -> Html {
     let data_duration_onchange = {
         let data_duration = data_duration.clone();
         Callback::from(move |e: Event| {
-            e.target()
+            if let Some(input) = e
+                .target()
                 .and_then(|t| t.dyn_into::<HtmlInputElement>().ok())
-                .map(|i| data_duration.set(i.value()));
+            {
+                data_duration.set(input.value());
+            }
         })
     };
 
     let sampling_interval_onchange = {
         let sampling_interval = sampling_interval.clone();
         Callback::from(move |e: Event| {
-            e.target()
+            if let Some(input) = e
+                .target()
                 .and_then(|t| t.dyn_into::<HtmlInputElement>().ok())
-                .map(|i| sampling_interval.set(i.value()));
+            {
+                sampling_interval.set(input.value());
+            }
         })
     };
 
@@ -236,9 +241,9 @@ fn data_view(DataViewProps { device_id }: &DataViewProps) -> Html {
             <h2>{ format!("Device: {}", **device_id) }</h2>
             <div class="data-view-settings">
                 <span>{ "Duration:" }</span>
-                <input style="width: 7ch;" onchange={data_duration_onchange} placeholder={format!("{}", *data_duration)}/>
+                <input style="width: 7ch;" onchange={data_duration_onchange} placeholder={(*data_duration).to_string()}/>
                 <span>{ "Sampling interval:" }</span>
-                <input style="width: 7ch;" onchange={sampling_interval_onchange} placeholder={format!("{}", *sampling_interval)}/>
+                <input style="width: 7ch;" onchange={sampling_interval_onchange} placeholder={(*sampling_interval).to_string()}/>
                 <button onclick={reset_button_onclick}>{ "Reset Data" }</button>
             </div>
             <table>
@@ -275,7 +280,7 @@ struct ConnectedDevicesListProps {
 fn connected_devices_list(
     ConnectedDevicesListProps { selected_id }: &ConnectedDevicesListProps,
 ) -> Html {
-    let ids = use_state(|| Vec::<String>::new());
+    let ids = use_state(Vec::<String>::new);
     {
         let ids = ids.clone();
         use_interval(
@@ -311,7 +316,7 @@ fn connected_devices_list(
 
 #[function_component(App)]
 fn app() -> Html {
-    let selected_id = use_state(|| String::new());
+    let selected_id = use_state(String::new);
 
     html! {
         <>

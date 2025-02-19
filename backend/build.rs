@@ -14,7 +14,7 @@ where
     P: AsRef<Path>,
 {
     Command::new("trunk")
-        .args(&["build", "--release"])
+        .args(["build", "--release"])
         .current_dir(source.as_ref())
         .status()
         .expect("Failed to build frontend");

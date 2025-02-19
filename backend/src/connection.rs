@@ -17,7 +17,7 @@ impl Connection {
         &self.recent_data
     }
 
-    pub fn reset_recent_data(&mut self) -> () {
+    pub fn reset_recent_data(&mut self) {
         self.recent_data = DataFrame::empty();
     }
 

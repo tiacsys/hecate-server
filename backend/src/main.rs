@@ -69,7 +69,7 @@ async fn static_files(path: PathBuf) -> Result<NamedFile, NotFound<String>> {
     let path = PathBuf::from("../ui/dist").join(path);
     NamedFile::open(path)
         .await
-        .or_else(|e| Err(NotFound(e.to_string())))
+        .map_err(|e| NotFound(e.to_string()))
 }
 
 #[get("/sensor/connections")]
@@ -82,7 +82,7 @@ async fn connections(state: &State<Connections>) -> Json<Vec<String>> {
 #[get("/sensor/<id>/connected")]
 async fn sensor_connected(id: &str, state: &State<Connections>) -> Option<Json<bool>> {
     let mut lock = state.connections.lock().await;
-    Connections::get(&mut lock, id).and_then(|c| Some(Json(c.active)))
+    Connections::get(&mut lock, id).map(|c| Json(c.active))
 }
 
 #[get("/sensor/<id>/data?<interval>&<duration>")]
@@ -136,17 +136,19 @@ async fn sensor_data(
                 }
             }
         })
-        .and_then(|d| Some(Json(d)))
+        .map(Json)
 }
 
 #[post("/sensor/<id>/data/reset")]
-async fn sensor_data_reset(id: &str, state: &State<Connections>) -> () {
+async fn sensor_data_reset(id: &str, state: &State<Connections>) {
     let mut lock = state.connections.lock().await;
-    Connections::get(&mut lock, id).map(|c| c.reset_recent_data());
+    if let Some(c) = Connections::get(&mut lock, id) {
+        c.reset_recent_data();
+    }
 }
 
 #[get("/ws")]
-async fn ws_data<'r>(ws: ws::WebSocket, state: &'r State<Connections>) -> ws::Channel<'r> {
+async fn ws_data(ws: ws::WebSocket, state: &State<Connections>) -> ws::Channel<'_> {
     use rocket::futures::{SinkExt, StreamExt};
 
     ws.channel(move |mut stream| {
