@@ -166,7 +166,7 @@ async fn ws_data<'r>(ws: ws::WebSocket, state: &'r State<Connections>) -> ws::Ch
                 if let Some(connection) = lock.get_mut(&id) {
                     connection.active = true;
                 } else {
-                    let mut new_connection = Connection::new(&id);
+                    let mut new_connection = Connection::new();
                     new_connection.active = true;
                     lock.insert(id.clone(), new_connection);
                 }

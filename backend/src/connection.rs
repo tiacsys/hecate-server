@@ -1,15 +1,13 @@
 use polars::prelude::*;
 
 pub struct Connection {
-    id: String,
     pub active: bool,
     recent_data: DataFrame,
 }
 
 impl Connection {
-    pub fn new(id: &str) -> Self {
+    pub fn new() -> Self {
         Self {
-            id: id.into(),
             active: false,
             recent_data: DataFrame::empty(),
         }
