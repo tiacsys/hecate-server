@@ -24,16 +24,19 @@ impl Connection {
     }
 
     pub fn append_data(&mut self, new_data: DataFrame) -> Result<(), PolarsError> {
-        self.recent_data = concat_lf_diagonal([
-                self.recent_data.clone().lazy(),
-                new_data.clone().lazy(),
-            ], Default::default())?
-            .collect()?;
+        self.recent_data = concat_lf_diagonal(
+            [self.recent_data.clone().lazy(), new_data.clone().lazy()],
+            Default::default(),
+        )?
+        .collect()?;
         Ok(())
     }
 
     pub fn discard_older_than(&mut self, duration: chrono::Duration) -> Result<(), PolarsError> {
-        self.recent_data = self.recent_data.clone().lazy()
+        self.recent_data = self
+            .recent_data
+            .clone()
+            .lazy()
             .filter(col("time").gt(col("time").max() - lit(duration)))
             .collect()?;
         Ok(())

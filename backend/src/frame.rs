@@ -2,7 +2,6 @@ use hecate_protobuf as proto;
 use polars::prelude::*;
 use std::time::Duration as StdDuration;
 
-
 pub trait Frame {
     type Error;
     fn frame(&self) -> Result<DataFrame, Self::Error>;

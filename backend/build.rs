@@ -9,9 +9,9 @@ fn main() {
     build_frontend(FRONTEND_DIR);
 }
 
-fn build_frontend<P>(source: P) 
+fn build_frontend<P>(source: P)
 where
-    P: AsRef<Path>
+    P: AsRef<Path>,
 {
     Command::new("trunk")
         .args(&["build", "--release"])
